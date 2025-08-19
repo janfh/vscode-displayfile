@@ -1,5 +1,6 @@
 import { expect, describe, it } from "vitest";
 import { DdsLineRange, DisplayFile, FieldInfo } from "../ui/dspf";
+import exp from "constants";
 
 describe('DisplayFile tests', () => {
 
@@ -28,15 +29,15 @@ describe('DisplayFile tests', () => {
     let dds = new DisplayFile();
     dds.parse(dspf1);
 
-    expect(dds.getRangeForFormat(`DONOTEXIST`)).toBeUndefined();
+    expect(dds.getHeaderRangeForFormat(`DONOTEXIST`)).toBeUndefined();
     
     let range: DdsLineRange | undefined;
 
-    range = dds.getRangeForFormat(`FMT1`);
+    range = dds.getHeaderRangeForFormat(`FMT1`);
     expect(range?.start).toBe(3);
     expect(range?.end).toBe(9);
 
-    range = dds.getRangeForFormat(`HEAD`);
+    range = dds.getHeaderRangeForFormat(`HEAD`);
     expect(range?.start).toBe(1);
     expect(range?.end).toBe(3);
   });
@@ -56,13 +57,48 @@ describe('DisplayFile tests', () => {
     range = dds.getRangeForField(`FORM1`, `FLD0102`);
     expect(range?.start).toBe(17);
     expect(range?.end).toBe(17);
+  });
+
+  it('generates the same as what is provided', () => {
+    let dds = new DisplayFile();
+    dds.parse(dspf1);
+
+    const form1 = dds.formats.find(f => f.name === `FORM1`);
+    expect(form1).toBeDefined();
+
+    const FLD0101 = form1?.fields.find(f => f.name === `FLD0101`);
+    expect(FLD0101).toBeDefined();
+    expect(FLD0101?.keywords.length).toBe(2);
+
+    const DSPATR = FLD0101?.keywords.find(k => k.name === `DSPATR`);
+    expect(DSPATR).toBeDefined();
+    expect(DSPATR?.value).toBe(`PR`);
+    expect(DSPATR?.conditions.length).toBe(1);
+
+    const cond = DSPATR?.conditions[0];
+    expect(cond).toBeDefined();
+    expect(cond?.indicator).toBe(20);
+    expect(cond?.negate).toBeFalsy();
+
+    const generatedKeywordLines = DisplayFile.getLinesForKeyword(DSPATR!);
+    expect(generatedKeywordLines.length).toBe(1);
+    expect(generatedKeywordLines[0]).toBe(dspf1[15].trimEnd());
+
+    const generateFieldLines = DisplayFile.getLinesForField(FLD0101!);
+    expect(generateFieldLines.length).toBe(3);
+
+    expect(generateFieldLines[0]).toBe(dspf1[14].trimEnd());
+    expect(generateFieldLines[1]).toBe(dspf1[15].trimEnd());
+    expect(generateFieldLines[2]).toBe(dspf1[16].trimEnd());
+
+    const generatedRecordFormatLines = DisplayFile.getHeaderLinesForFormat(form1!.name, form1!.keywords);
+    expect(generatedRecordFormatLines.length).toBe(2);
+    expect(generatedRecordFormatLines[0]).toBe(dspf1[12].trimEnd());
+    expect(generatedRecordFormatLines[1]).toBe(dspf1[13].trimEnd());
 
   });
 
   it('getLinesForField', () => {
-
-    let dds = new DisplayFile();
-
     let field = new FieldInfo(0);
     field.displayType = `const`;
     field.value = `Some text`;
@@ -92,7 +128,6 @@ describe('DisplayFile tests', () => {
     expect(lines[0]).toBe(`     A                                  4 10'Some text'`);
     expect(lines[1]).toBe(`     A                                      COLOR(BLU)`);
     expect(lines[2]).toBe(`     A                                      DSPATR(PR)`);
-
   });
 
   it('No duplicate RecordInfo', () => {
